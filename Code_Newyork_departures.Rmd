@@ -1,0 +1,246 @@
+---
+title: "Project2_5300"
+author: "LAVANYA B"
+output: html_document
+---
+
+
+#1. Does the average gain differ for flights that departed late versus those that did not? What about for flights that departed more than 30 minutes late?
+
+```{r}
+
+# Load necessary libraries
+library(nycflights13)
+library(tidyverse)
+library(ggplot2)
+
+# Load flight data
+flights_data <- nycflights13::flights
+
+# Filter for United Airlines (UA) flights
+ua_flights_data <- flights_data %>%
+  filter(carrier == "UA")
+
+# Create a new variable for net gain
+ua_flights_data <- ua_flights_data %>%
+  mutate(net_gain = dep_delay - arr_delay)
+
+# Perform t-test for flights that departed late versus those that did not
+t_test_result_late_vs_not_late <- t.test(net_gain ~ (dep_delay > 0), data = ua_flights_data)
+
+# Display the t-test result
+print("T-Test for Average Gain for Flights that Departed Late versus Not Late:")
+print(t_test_result_late_vs_not_late)
+
+# Perform t-test for flights that departed more than 30 minutes late versus those that did not
+t_test_result_late_more_than_30_vs_not_late <- t.test(net_gain ~ (dep_delay > 30), data = ua_flights_data)
+
+# Display the t-test result
+print("T-Test for Average Gain for Flights that Departed More than 30 Minutes Late versus Not Late:")
+print(t_test_result_late_more_than_30_vs_not_late)
+
+# Create boxplot for net gain comparing flights that departed late versus not late
+ggplot(ua_flights_data, aes(x = ifelse(dep_delay > 0, "Late", "On Time"), y = net_gain, fill = ifelse(dep_delay > 0, "Late", "On Time"))) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Net Gain for Flights that Departed Late Vs On Time",
+       x = "Departure Delay Status",
+       y = "Net Gain") +
+  scale_fill_discrete(name = "Departure Delay") +
+  theme_minimal()
+
+# Plot boxplot for net gain comparing flights that departed more than 30 minutes late versus not late
+ggplot(ua_flights_data, aes(x = ifelse(dep_delay > 30, "Late", "On Time"), y = net_gain, fill = ifelse(dep_delay > 30, "Late", "On Time"))) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Net Gain for Flights that Departed More than 30 Minutes Late Vs On Time",
+       x = "Departure Delay Status",
+       y = "Net Gain") +
+  scale_fill_discrete(name = "Departure Delay") +
+  theme_minimal()
+
+
+
+```
+
+
+#2. What are the five most common destination airports for United Airlines flights from New York City? Describe the distribution and the average gain for each of these five airports.
+
+```{r}
+
+library(nycflights13)
+
+# Filter United Airlines (UA) flights from New York City
+ua_flights <- filter(flights, carrier == "UA", origin %in% c("JFK", "LGA", "EWR"))
+
+# Calculate net gain for each flight
+ua_flights <- mutate(ua_flights, net_gain = dep_delay - arr_delay)
+
+# Identify the five most common destination airports
+top_destinations <- ua_flights %>%
+  group_by(dest) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  head(5)
+top_destinations
+
+```
+```{r}
+# Describe the distribution and average gain for each of these five airports
+summary_stats <- ua_flights %>%
+  filter(dest %in% top_destinations$dest) %>%
+  group_by(dest) %>%
+  summarise(
+    avg_gain = mean(net_gain, na.rm = TRUE),
+    median_gain = median(net_gain, na.rm = TRUE),
+    sd_gain = sd(net_gain, na.rm = TRUE)
+    
+  )
+
+print(summary_stats)
+```
+
+```{r}
+# T-test for each destination airport
+t_test_results <- ua_flights %>%
+  filter(dest %in% top_destinations$dest) %>%
+  group_by(dest) %>%
+  summarise(
+    t_statistic = t.test(net_gain)$statistic,
+    p_value = t.test(net_gain)$p.value
+  )
+
+# Confidence intervals for each destination airport
+ci_results <- ua_flights %>%
+  filter(dest %in% top_destinations$dest) %>%
+  group_by(dest) %>%
+  summarise(
+    avg_gain = mean(net_gain, na.rm = TRUE),
+    ci_lower = t.test(net_gain)$conf.int[1],
+    ci_upper = t.test(net_gain)$conf.int[2]
+  )
+
+# Combine t-test and confidence interval results
+combined_results <- left_join(t_test_results, ci_results, by = "dest")
+
+print(combined_results)
+```
+
+```{r}
+# Create a bar graph
+ggplot(ci_results, aes(x = dest, y = avg_gain, fill = dest)) +
+  geom_bar(stat = "identity", position = "dodge", color = "black") +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), position = position_dodge(0.9), width = 0.25) +
+  labs(title = "Average Net Gain and Confidence Interval by Destination Airport",
+       x = "Destination Airport",
+       y = "Average Net Gain") +
+  theme_minimal()
+```
+
+
+#3. Another common measure of interest, in addition to total gain, is the gain relative to the duration of the flight. Calculate the gain per hour by dividing the total gain by the duration in hours of each flight. Does the average gain per hour differ for flights that departed late versus those that did not? What about for flights that departed more than 30 minutes late?
+
+
+```{r}
+library(nycflights13)
+library(dplyr)
+library(ggplot2)
+
+# Filter United Airlines (UA) flights from New York City
+ua_flights <- filter(flights, carrier == "UA", origin %in% c("JFK", "LGA", "EWR"))
+
+# Calculate net gain for each flight
+ua_flights <- mutate(ua_flights, net_gain = dep_delay - arr_delay)
+
+# Calculate gain per hour
+ua_flights <- mutate(ua_flights, gain_per_hour = net_gain / (air_time / 60))
+
+# Create a new variable for late departure (more than 30 minutes late)
+ua_flights <- mutate(ua_flights, late_departure = ifelse(dep_delay > 30, "Late Departure", "On Time"))
+
+# Perform t-test to compare average gain per hour for late departures vs. on-time departures
+t_test_result <- t.test(gain_per_hour ~ late_departure, data = ua_flights)
+
+# Print the t-test result
+print(t_test_result)
+
+# Create a box plot to compare gain per hour for late departures vs. on-time departures
+ggplot(ua_flights, aes(x = late_departure, y = gain_per_hour, fill = late_departure)) +
+  geom_boxplot() +
+  geom_text(aes(label = paste("p =", format(t_test_result$p.value, digits = 2))), 
+            x = 1.5, y = max(ua_flights$gain_per_hour), hjust = 0.5, vjust = -0.5, color = "black") +
+  labs(title = "Box Plot of Gain Per Hour by Departure Status",
+       x = "Departure Status",
+       y = "Gain Per Hour (minutes)") +
+  scale_fill_manual(values = c("lightblue", "lightcoral")) +
+  theme_minimal()
+
+```
+
+#4. Does the average gain per hour differ for longer flights versus shorter flights?
+
+```{r}
+# Load necessary libraries
+library(nycflights13)
+library(dplyr)
+
+# Filter United Airlines (UA) flights from New York City
+ua_flights <- filter(flights, carrier == "UA", origin %in% c("JFK", "LGA", "EWR"))
+
+# Calculate net gain for each flight
+ua_flights <- mutate(ua_flights, net_gain = dep_delay - arr_delay)
+
+# Calculate gain per hour
+ua_flights <- mutate(ua_flights, gain_per_hour = net_gain / (air_time / 60))
+
+# Define a threshold for flight duration (e.g., 180 minutes, adjust as needed)
+duration_threshold <- 180
+
+# Create new variables for longer and shorter flights
+ua_flights <- mutate(ua_flights, 
+                     longer_flight = air_time > duration_threshold,
+                     shorter_flight = air_time <= duration_threshold)
+
+# Perform t-test to compare average gain per hour for longer flights vs. shorter flights
+t_test_longer <- t.test(gain_per_hour ~ longer_flight, data = ua_flights)
+
+# Perform t-test to compare average gain per hour for shorter flights vs. longer flights
+t_test_shorter <- t.test(gain_per_hour ~ shorter_flight, data = ua_flights)
+
+
+print(t_test_longer)
+
+print(t_test_shorter)
+
+```
+
+```{r}
+# Create a box plot to compare gain per hour for longer flights vs. shorter flights
+ggplot(ua_flights, aes(x = factor(longer_flight), y = gain_per_hour, fill = factor(longer_flight))) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Gain Per Hour by Flight Duration",
+       x = "Flight Duration",
+       y = "Gain Per Hour (minutes)") +
+  scale_fill_manual(values = c("lightblue", "lightcoral"), labels = c("Shorter Flights", "Longer Flights")) +
+  theme_minimal()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
